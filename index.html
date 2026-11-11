@@ -121,6 +121,25 @@
             const [stepX, setStepX] = useState(10);
             const [stepY, setStepY] = useState(10);
 
+            // 가장 강력한 스크롤 방지 이벤트 강제 주입
+            useEffect(() => {
+                const canvas = canvasRef.current;
+                if (!canvas) return;
+
+                const preventScroll = (e) => {
+                    e.preventDefault();
+                };
+
+                // passive: false를 주어야 브라우저에서 스크롤을 완전히 차단할 수 있습니다.
+                canvas.addEventListener('touchstart', preventScroll, { passive: false });
+                canvas.addEventListener('touchmove', preventScroll, { passive: false });
+
+                return () => {
+                    canvas.removeEventListener('touchstart', preventScroll);
+                    canvas.removeEventListener('touchmove', preventScroll);
+                };
+            }, []);
+
             const startDrawing = (e) => {
                 if (isSimulating || currentTime > 0) return;
                 const canvas = canvasRef.current;
@@ -286,13 +305,19 @@
                                         ref={canvasRef}
                                         width={500}
                                         height={300}
+                                        /* 
+                                            [핵심 수정] 
+                                            style={{ touchAction: 'none' }}를 추가해 
+                                            CSS 차원에서도 브라우저 제스처(확대, 스크롤 등)를 완전히 차단합니다. 
+                                        */
+                                        style={{ touchAction: 'none' }}
                                         className={`bg-white touch-none ${isSimulating ? 'cursor-not-allowed' : 'cursor-crosshair'}`}
                                         onMouseDown={startDrawing}
                                         onMouseMove={draw}
                                         onMouseUp={stopDrawing}
                                         onMouseLeave={stopDrawing}
-                                        onTouchStart={(e) => { e.preventDefault(); startDrawing(e.touches[0]); }}
-                                        onTouchMove={(e) => { e.preventDefault(); draw(e.touches[0]); }}
+                                        onTouchStart={(e) => { startDrawing(e.touches[0]); }}
+                                        onTouchMove={(e) => { draw(e.touches[0]); }}
                                         onTouchEnd={stopDrawing}
                                     />
                                 </div>
