@@ -247,8 +247,6 @@
             const handleGraphClick = (e) => {
                 const rect = e.currentTarget.getBoundingClientRect();
 
-                // 그래프의 실제 표시 크기를 기준으로 클릭 위치를 계산
-                // 화면 크기가 달라져도 클릭한 위치에 정확히 점이 찍히도록 함
                 if (!rect.width || !rect.height || !Number.isFinite(maxX) || maxX <= 0) return;
 
                 const xRatio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
@@ -288,7 +286,7 @@
                                         ref={canvasRef}
                                         width={500}
                                         height={300}
-                                        className={`bg-white ${isSimulating ? 'cursor-not-allowed' : 'cursor-crosshair'}`}
+                                        className={`bg-white touch-none ${isSimulating ? 'cursor-not-allowed' : 'cursor-crosshair'}`}
                                         onMouseDown={startDrawing}
                                         onMouseMove={draw}
                                         onMouseUp={stopDrawing}
