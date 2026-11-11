@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>수리고등학교 과학과제연구 신기하조 디지털 실험실</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
@@ -121,27 +121,21 @@
             const [stepX, setStepX] = useState(10);
             const [stepY, setStepY] = useState(10);
 
-            // 가장 강력한 스크롤 방지 이벤트 강제 주입
+            // 다른 화면으로 넘어갈 때 혹시라도 스크롤이 잠겨있으면 풀어주는 안전장치
             useEffect(() => {
-                const canvas = canvasRef.current;
-                if (!canvas) return;
-
-                const preventScroll = (e) => {
-                    e.preventDefault();
-                };
-
-                // passive: false를 주어야 브라우저에서 스크롤을 완전히 차단할 수 있습니다.
-                canvas.addEventListener('touchstart', preventScroll, { passive: false });
-                canvas.addEventListener('touchmove', preventScroll, { passive: false });
-
                 return () => {
-                    canvas.removeEventListener('touchstart', preventScroll);
-                    canvas.removeEventListener('touchmove', preventScroll);
+                    document.body.style.overflow = '';
+                    document.body.style.touchAction = '';
                 };
             }, []);
 
             const startDrawing = (e) => {
                 if (isSimulating || currentTime > 0) return;
+                
+                // [핵심 해결 방법] 그리기 시작할 때 화면 전체의 스크롤을 강제로 잠금
+                document.body.style.overflow = 'hidden';
+                document.body.style.touchAction = 'none';
+
                 const canvas = canvasRef.current;
                 const rect = canvas.getBoundingClientRect();
                 const x = e.clientX - rect.left;
@@ -165,6 +159,10 @@
             };
 
             const stopDrawing = () => {
+                // 그리기 끝나면 화면 전체 스크롤 잠금 해제
+                document.body.style.overflow = '';
+                document.body.style.touchAction = '';
+
                 if (!isDrawing) return;
                 setIsDrawing(false);
                 if (currentPath && currentPath.points.length > 0) {
@@ -300,16 +298,14 @@
                                 <h3 className="text-lg font-bold text-green-800 mb-2">1. 종이에 기화펜으로 그리기</h3>
                                 <p className="text-sm text-gray-500 mb-4">마우스나 손가락으로 그림을 그린 뒤 [측정 시작]을 누르세요.</p>
                                 
-                                <div className="bg-white border-2 border-dashed border-gray-300 rounded-lg overflow-hidden flex justify-center mb-4">
+                                <div 
+                                    className="bg-white border-2 border-dashed border-gray-300 rounded-lg overflow-hidden flex justify-center mb-4"
+                                    style={{ touchAction: 'none' }} // 캔버스 주변 영역 터치도 막음
+                                >
                                     <canvas
                                         ref={canvasRef}
                                         width={500}
                                         height={300}
-                                        /* 
-                                            [핵심 수정] 
-                                            style={{ touchAction: 'none' }}를 추가해 
-                                            CSS 차원에서도 브라우저 제스처(확대, 스크롤 등)를 완전히 차단합니다. 
-                                        */
                                         style={{ touchAction: 'none' }}
                                         className={`bg-white touch-none ${isSimulating ? 'cursor-not-allowed' : 'cursor-crosshair'}`}
                                         onMouseDown={startDrawing}
@@ -319,6 +315,7 @@
                                         onTouchStart={(e) => { startDrawing(e.touches[0]); }}
                                         onTouchMove={(e) => { draw(e.touches[0]); }}
                                         onTouchEnd={stopDrawing}
+                                        onTouchCancel={stopDrawing}
                                     />
                                 </div>
                                 
