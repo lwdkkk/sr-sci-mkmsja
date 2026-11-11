@@ -13,7 +13,7 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useRef, useEffect } = React;
+        const { useState, useRef, useEffect, useMemo } = React;
 
         const concentrationData = [
             { time: 0, concentration: 100.0 },
@@ -106,14 +106,13 @@
         function DigitalExperiment({ onNavigate }) {
             const [intervalTime, setIntervalTime] = useState(5);
             const [isSimulating, setIsSimulating] = useState(false);
-            const [currentTime, setCurrentTime] = useState(0);
+            const [currentTime, setCurrentTime] = useState(0); // 부드러운 애니메이션을 위한 실수(float) 시간
             
             const canvasRef = useRef(null);
             const [isDrawing, setIsDrawing] = useState(false);
             const [paths, setPaths] = useState([]);
             const [currentPath, setCurrentPath] = useState(null);
             
-            const [collectedData, setCollectedData] = useState([]);
             const [userPoints, setUserPoints] = useState([]);
             const [showOverlay, setShowOverlay] = useState(false);
             
@@ -121,7 +120,40 @@
             const [stepX, setStepX] = useState(10);
             const [stepY, setStepY] = useState(10);
 
-            // 다른 화면으로 넘어갈 때 혹시라도 스크롤이 잠겨있으면 풀어주는 안전장치
+            // 현재 흘러간 시간(currentTime)을 바탕으로 표와 그래프에 들어갈 데이터를 계산 (간격에 맞춰서만 생성)
+            const collectedData = useMemo(() => {
+                const data = [];
+                // 측정 전이면 데이터 비움
+                if (currentTime === 0 && !isSimulating) return data;
+
+                // 입력한 측정 간격(intervalTime)에 도달할 때마다 표에 데이터 추가
+                const maxMultiple = Math.floor(currentTime / Number(intervalTime));
+                for (let i = 0; i <= maxMultiple; i++) {
+                    const t = i * Number(intervalTime);
+                    if (t > 75) break;
+                    const conc = getConcentrationAtTime(t);
+                    data.push({
+                        time: t,
+                        s: conc.toFixed(2),
+                        v: (100 - ((100 - conc) * 0.2)).toFixed(2),
+                        concentration: conc.toFixed(2)
+                    });
+                }
+                
+                // 75분에서 끝날 때 딱 안 떨어지면 마지막 데이터 강제 추가
+                if (currentTime === 75 && 75 % Number(intervalTime) !== 0) {
+                    const conc = getConcentrationAtTime(75);
+                    data.push({
+                        time: 75,
+                        s: conc.toFixed(2),
+                        v: (100 - ((100 - conc) * 0.2)).toFixed(2),
+                        concentration: conc.toFixed(2)
+                    });
+                }
+                return data;
+            }, [currentTime, intervalTime, isSimulating]);
+
+            // 모바일 스크롤 고정 장치
             useEffect(() => {
                 return () => {
                     document.body.style.overflow = '';
@@ -132,7 +164,6 @@
             const startDrawing = (e) => {
                 if (isSimulating || currentTime > 0) return;
                 
-                // [핵심 해결 방법] 그리기 시작할 때 화면 전체의 스크롤을 강제로 잠금
                 document.body.style.overflow = 'hidden';
                 document.body.style.touchAction = 'none';
 
@@ -159,7 +190,6 @@
             };
 
             const stopDrawing = () => {
-                // 그리기 끝나면 화면 전체 스크롤 잠금 해제
                 document.body.style.overflow = '';
                 document.body.style.touchAction = '';
 
@@ -175,12 +205,12 @@
                 setPaths([]);
                 setCurrentPath(null);
                 setCurrentTime(0);
-                setCollectedData([]);
                 setUserPoints([]);
                 setShowOverlay(false);
                 setIsSimulating(false);
             };
 
+            // 캔버스 그리기 (초당 60번씩 부드럽게 투명도가 변함)
             useEffect(() => {
                 const canvas = canvasRef.current;
                 if (!canvas) return;
@@ -201,7 +231,7 @@
                     if (path.points.length === 0) return;
                     
                     ctx.beginPath();
-                    ctx.strokeStyle = `rgba(30, 64, 175, ${opacity})`;
+                    ctx.strokeStyle = `rgba(30, 64, 175, ${opacity})`; // opacity가 소수점으로 아주 미세하게 줄어듦
                     
                     ctx.moveTo(path.points[0].x, path.points[0].y);
                     for (let i = 1; i < path.points.length; i++) {
@@ -221,45 +251,31 @@
                     return;
                 }
                 
-                setCollectedData([]);
                 setCurrentTime(0);
                 setIsSimulating(true);
             };
 
+            // [핵심 변경] 초당 60프레임으로 엄청 부드럽게 시간을 쪼개서 증가시킴
             useEffect(() => {
                 let timer;
                 if (isSimulating) {
+                    const FPS = 60; // 초당 프레임 수
+                    const intervalMs = 1000 / FPS; // 약 16.6ms 마다 실행
+                    const timeIncrement = Number(intervalTime) / FPS; // 1프레임당 더해질 시뮬레이션 시간
+
                     timer = setInterval(() => {
                         setCurrentTime(prev => {
-                            const nextTime = prev + Number(intervalTime);
+                            const nextTime = prev + timeIncrement;
                             if (nextTime >= 75) {
                                 setIsSimulating(false);
-                                return 75;
+                                return 75; // 75분이 되면 정지
                             }
                             return nextTime;
                         });
-                    }, 1000);
+                    }, intervalMs);
                 }
                 return () => clearInterval(timer);
             }, [isSimulating, intervalTime]);
-
-            useEffect(() => {
-                if (currentTime >= 0 && (isSimulating || currentTime === 75)) {
-                    const conc = getConcentrationAtTime(currentTime);
-                    const s = conc;
-                    const v = 100 - ((100 - conc) * 0.2);
-                    
-                    setCollectedData(prev => {
-                        if (prev.some(d => d.time === currentTime)) return prev;
-                        return [...prev, {
-                            time: currentTime,
-                            s: s.toFixed(2),
-                            v: v.toFixed(2),
-                            concentration: conc.toFixed(2)
-                        }];
-                    });
-                }
-            }, [currentTime, isSimulating]);
 
             const handleGraphClick = (e) => {
                 const rect = e.currentTarget.getBoundingClientRect();
@@ -300,7 +316,7 @@
                                 
                                 <div 
                                     className="bg-white border-2 border-dashed border-gray-300 rounded-lg overflow-hidden flex justify-center mb-4"
-                                    style={{ touchAction: 'none' }} // 캔버스 주변 영역 터치도 막음
+                                    style={{ touchAction: 'none' }}
                                 >
                                     <canvas
                                         ref={canvasRef}
